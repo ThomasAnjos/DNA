@@ -1,0 +1,113 @@
+# ASP.NET Core
+# Build and test ASP.NET Core projects targeting .NET Core.
+# Add steps that run tests, create a NuGet package, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
+
+trigger:
+- develop
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  BuildConfiguration: 'Release'
+
+steps:
+#- script: dotnet build --configuration $(BuildConfiguration)
+#  displayName: 'dotnet build $(BuildConfiguration)'
+
+- task: UseDotNet@2
+  displayName: 'DotNet SDK'
+  inputs:
+    packageType: 'sdk'
+    version: '3.1.x'
+
+- task: DotNetCoreCLI@2
+  displayName: 'DotNet Restore'
+  inputs:
+    command: restore
+    projects: '**/*.csproj'
+
+- task: DotNetCoreCLI@2
+  displayName: 'DotNet Build'
+  inputs:
+    projects: '**/*.csproj'
+    arguments: '--configuration $(BuildConfiguration)'
+
+- task: DotNetCoreCLI@2
+  displayName: 'DotNet Test'
+  inputs:
+    command: test
+    projects: '**/*UnitTests/*.csproj'
+    arguments: '--configuration $(BuildConfiguration) /p:CollectCoverage=true'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Publish Functional Test'
+  inputs:
+    command: publish
+    publishWebProjects: false
+    projects: '**/*FunctionalTests*.csproj'
+    arguments: '--configuration $(BuildConfiguration) --output "$(build.artifactstagingdirectory)/FunctionalTests"'
+    zipAfterPublish: false
+    modifyOutputPath: false
+
+- task: CopyFiles@2
+  displayName: 'Copy Runsettings File'
+  inputs:
+    Contents: '**/*.runsettings'
+    TargetFolder: '$(build.artifactstagingdirectory)/FunctionalTests'
+    flattenFolders: true
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact'
+  inputs:
+    PathtoPublish: '$(build.artifactstagingdirectory)'
+
+# - task: DotNetCoreCLI@2
+#   displayName: 'Publish WebApp'
+#   inputs:
+#     command: 'publish'
+#     publishWebProjects: true
+#     arguments: '--configuration $(BuildConfiguration) --output $(System.DefaultWorkingDirectory)/PublishedWebApp'
+#     zipAfterPublish: true
+
+- task: Docker@2
+  displayName: 'Build And Push - DockerHub'
+  inputs:
+    containerRegistry: 'DockerHub_jhnjohnny'
+    repository: 'jhnjohnny/dnaservice'
+    command: 'buildandpush'
+    Dockerfile: '**/Dockerfile'
+#    buildContext: '$(System.DefaultWorkingDirectory)/PublishedWebApp'
+    tags: |
+      $(Build.BuildId)
+      latest
+
+# - task: Docker@1
+#   displayName: 'Build an image'
+#   inputs:
+#     containerregistrytype: 'Azure Container Registry'
+#     azureSubscriptionEndpoint: 'azure_jhnjohnny'
+#     azureContainerRegistry: 'dnaservice.azurecr.io'
+#     command: 'Build an image'
+#     dockerFile: '**/Dockerfile'
+#     imageName: 'dnaservice:$(Build.BuildId)'
+#     useDefaultContext: false
+#     buildContext: '$(System.DefaultWorkingDirectory)/PublishedWebApp'
+
+# - task: Docker@1
+#   displayName: 'Push an image'
+#   inputs:
+#     containerregistrytype: 'Azure Container Registry'
+#     azureSubscriptionEndpoint: 'azure_jhnjohnny'
+#     azureContainerRegistry: 'dnaservice.azurecr.io'
+#     command: 'Push an image'
+#     imageName: 'dnaservice:$(Build.BuildId)'
+
+# DEPLOY MOVIDO PARA RELEASE
+# - task: AzureWebAppContainer@1
+#   displayName: 'Deploy WebAppDocker'
+#   inputs:
+#     azureSubscription: 'AzureRM_jhnjohnny'
+#     appName: 'dnaservice'
+#     containers: 'jhnjohnny/dnaservice:latest'
